@@ -39,9 +39,15 @@ jobs:
     if: github.event_name == 'workflow_dispatch'  # Ensures manual approval triggers this job
     steps:
       - name: Approval Received
-        run: echo "Manual approval step triggered. Proceeding to next deployment phase."
+        run: echo "Manual approval step triggered. Proceeding to finalize deployment."
 
       - name: Execute Post-Approval Steps
         run: |
           echo "Executing final deployment steps after approval..."
           ./finalize_deployment.sh
+
+      - name: Send Slack Notification - Database Schema Deployed
+        run: |
+          curl -X POST -H 'Content-type: application/json' --data '{
+            "text": "✅ *Database schema is deployed successfully for ${{ github.repository }}* \n\n🎯 *Environment:* ${{ matrix.environment }}\n🔗 *Run Details:* <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Workflow>"
+          }' ${{ secrets.SLACK_WEBHOOK_URL }}
