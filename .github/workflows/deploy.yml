@@ -1,58 +1,51 @@
-name: Deploy and Notify
+name: Deploy and Notify with Approval
 
 on:
   push:
     branches:
-      - master  # Trigger deployment on pushes to the main branch
+      - master  # Trigger deployment on push to master
+
+  workflow_dispatch:  # Allows manual approval step before proceeding
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted  # Runs on ASG-based GitHub self-hosted runner
     strategy:
       matrix:
-        environment: ["Dev", "Test", "Staging", "Prod"]  # Define environments for parallel deployment
+        environment: ["Dev", "Test", "Staging", "Prod"]
     steps:
-      # Step 1: Checkout the repository
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # Step 2: Set up the deployment script
       - name: Prepare deploy.sh
-        run: chmod +x deploy.sh  # Ensure the script is executable
+        run: chmod +x deploy.sh
 
-      # Step 3: Deploy based on the environment
       - name: Deploy to ${{ matrix.environment }}
-        run: ./deploy.sh ${{ matrix.environment }} 1.0.0  # Call the script with environment and version
+        run: ./deploy.sh ${{ matrix.environment }} 1.0.0
 
   notify:
-    needs: deploy  # Ensures notifications only run after deployment finishes
-    runs-on: ubuntu-latest
+    needs: deploy
+    runs-on: self-hosted
     steps:
-      - name: Send Deployment Notification to Slack
+      - name: Fetch Slack Webhook from AWS Secrets Manager
         run: |
-          STATUS="${{ job.status }}"
-          if [[ "$STATUS" == "success" ]]; then
-            COLOR="#36a64f"  # Green
-            EMOJI="✅"
-          elif [[ "$STATUS" == "failure" ]]; then
-            COLOR="#ff0000"  # Red
-            EMOJI="❌"
-          else
-            COLOR="#ffcc00"  # Yellow
-            EMOJI="⚠️"
-          fi
+          export SLACK_WEBHOOK_URL=$(aws secretsmanager get-secret-value --secret-id slack-webhook-url --query 'SecretString' --output text)
 
+      - name: Send Slack Notification for Approval
+        run: |
           curl -X POST -H 'Content-type: application/json' --data '{
-            "attachments": [
-              {
-                "color": "'$COLOR'",
-                "title": "🚀 Deployment Notification",
-                "fields": [
-                  { "title": "Repository", "value": "${{ github.repository }}", "short": true },
-                  { "title": "Status", "value": "'$EMOJI' $STATUS", "short": true },
-                  { "title": "Environment", "value": "${{ matrix.environment }}", "short": true },
-                  { "title": "Run Details", "value": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Deployment>", "short": false }
-                ]
-              }
-            ]
-          }' ${{ secrets.SLACK_WEBHOOK_URL }}
+            "text": "🚀 *Deployment Completed for ${{ github.repository }}* \n🔍 *Environment:* ${{ matrix.environment }}\n✅ *Status:* Success\n🔗 *Run Details:* <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Workflow>\n\n⚠️ *Action Required:* Please manually trigger the next step in GitHub Actions to continue deployment."
+          }' "$SLACK_WEBHOOK_URL"
+
+  approval:
+    needs: notify
+    runs-on: self-hosted
+    if: github.event_name == 'workflow_dispatch'  # Ensures only manual approval triggers this job
+    steps:
+      - name: Approval Received
+        run: echo "Manual approval step triggered. Proceeding to next deployment phase."
+
+      - name: Execute Post-Approval Steps
+        run: |
+          echo "Executing final deployment steps after approval..."
+          ./finalize_deployment.sh
