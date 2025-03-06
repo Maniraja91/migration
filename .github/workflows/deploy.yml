@@ -1,4 +1,4 @@
-name: Deploy and Notify with Approval
+name: Deploy with Approval
 
 on:
   push:
@@ -8,68 +8,38 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        environment: ["Dev", "Test", "Staging", "Prod"]
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4  # Ensures the repo is available
-
-      - name: Make deploy.sh Executable
-        run: chmod +x deploy.sh
-
-      - name: Execute deploy.sh
-        run: ./deploy.sh ${{ matrix.environment }} 1.0.0  # Runs the deploy script
-
-      - name: Debug - Check if finalize_deployment.sh Exists
-        run: ls -l finalize_deployment.sh || echo "Script NOT FOUND!"
-
-      - name: Save Final Deployment Script (If Exists)
-        if: success()  # Only upload if script exists
-        uses: actions/upload-artifact@v4
-        with:
-          name: finalize-deployment
-          path: finalize_deployment.sh
-          retention-days: 3  # Keep artifact for 3 days
-
-  notify:
-    needs: deploy
-    runs-on: ubuntu-latest
-    steps:
-      - name: Send Slack Notification for Approval
-        run: |
-          curl -X POST -H 'Content-type: application/json' --data '{
-            "text": "🚀 *Deployment Completed for ${{ github.repository }}* \n🔍 *Environment:* ${{ matrix.environment }}\n✅ *Status:* Success\n🔗 *Run Details:* <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Workflow>\n\n⚠️ *Action Required:* Please approve the next step in GitHub Actions before proceeding."
-          }' ${{ secrets.SLACK_WEBHOOK_URL }}
-
-  approval:
-    needs: notify
-    runs-on: ubuntu-latest
-    environment: production  # Ensures manual approval is required
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Restore Final Deployment Script (If Exists)
-        uses: actions/download-artifact@v4
-        with:
-          name: finalize-deployment
-          path: .  # Download to current working directory
+      - name: Deploy Application
+        run: |
+          echo "Deploying application..."
+          sleep 10  # Simulating deployment process
+          echo "Deployment completed successfully."
 
-      - name: Debug - Verify Script Exists
-        run: ls -l finalize_deployment.sh || echo "Script NOT FOUND AFTER DOWNLOAD!"
+      - name: Send Slack Notification for Approval
+        run: |
+          curl -X POST -H 'Content-type: application/json' --data '{
+            "text": "🚀 *Deployment Completed for ${{ github.repository }}* \n✅ *Status:* Success\n🔗 *Run Details:* <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Workflow>\n\n⚠️ *Action Required:* Please approve the next step in GitHub Actions."
+          }' ${{ secrets.SLACK_WEBHOOK_URL }}
 
-      - name: Make finalize_deployment.sh Executable
-        run: chmod +x finalize_deployment.sh
-
+  approval:
+    needs: deploy
+    runs-on: ubuntu-latest
+    environment: production  # Requires manual approval
+    steps:
       - name: Approval Received
         run: echo "Manual approval granted. Proceeding with deployment finalization."
 
-      - name: Execute finalize_deployment.sh
-        run: ./finalize_deployment.sh  # Runs final script after approval
+      - name: Final Deployment Steps
+        run: |
+          echo "Executing post-approval deployment steps..."
+          sleep 5  # Simulating final process
+          echo "Final deployment steps completed."
 
-      - name: Send Slack Notification - Database Schema Deployed
+      - name: Send Slack Notification - Deployment Completed
         run: |
           curl -X POST -H 'Content-type: application/json' --data '{
-            "text": "✅ *Database schema is deployed successfully for ${{ github.repository }}* \n\n🎯 *Environment:* ${{ matrix.environment }}\n🔗 *Run Details:* <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Workflow>"
+            "text": "✅ *Deployment successfully finalized for ${{ github.repository }}* \n🔗 *Run Details:* <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Workflow>"
           }' ${{ secrets.SLACK_WEBHOOK_URL }}
