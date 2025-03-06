@@ -13,7 +13,7 @@ jobs:
         environment: ["Dev", "Test", "Staging", "Prod"]
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4  # Use latest checkout action
 
       - name: Prepare deploy.sh
         run: chmod +x deploy.sh
@@ -22,7 +22,7 @@ jobs:
         run: ./deploy.sh ${{ matrix.environment }} 1.0.0
 
       - name: Save Final Deployment Script (If Generated)
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4  # Update to v4
         with:
           name: finalize-deployment
           path: finalize_deployment.sh
@@ -43,10 +43,10 @@ jobs:
     environment: production  # Ensures manual approval is required
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4  # Use latest checkout action
 
       - name: Restore Final Deployment Script (If Generated)
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4  # Update to v4
         with:
           name: finalize-deployment
 
