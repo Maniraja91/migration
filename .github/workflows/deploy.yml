@@ -1,14 +1,16 @@
+name: Deploy and Notify
+
 on:
   push:
     branches:
-      - master # Trigger deployment on pushes to the main branch
+      - master  # Trigger deployment on pushes to the main branch
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        environment: ["Dev", "Test", "Staging", "Prod"] # Define environments for parallel deployment
+        environment: ["Dev", "Test", "Staging", "Prod"]  # Define environments for parallel deployment
     steps:
       # Step 1: Checkout the repository
       - name: Checkout code
@@ -16,25 +18,41 @@ jobs:
 
       # Step 2: Set up the deployment script
       - name: Prepare deploy.sh
-        run: chmod +x deploy.sh # Ensure the script is executable
+        run: chmod +x deploy.sh  # Ensure the script is executable
 
       # Step 3: Deploy based on the environment
       - name: Deploy to ${{ matrix.environment }}
-        run: ./deploy.sh ${{ matrix.environment }} 1.0.0 # Call the script with environment and version
-name: Deploy and Notify
+        run: ./deploy.sh ${{ matrix.environment }} 1.0.0  # Call the script with environment and version
 
-on:
-  workflow_run:
-    workflows: ["Your Deployment Workflow"]
-    types:
-      - completed
-
-jobs:
   notify:
+    needs: deploy  # Ensures notifications only run after deployment finishes
     runs-on: ubuntu-latest
     steps:
       - name: Send Deployment Notification to Slack
         run: |
+          STATUS="${{ job.status }}"
+          if [[ "$STATUS" == "success" ]]; then
+            COLOR="#36a64f"  # Green
+            EMOJI="✅"
+          elif [[ "$STATUS" == "failure" ]]; then
+            COLOR="#ff0000"  # Red
+            EMOJI="❌"
+          else
+            COLOR="#ffcc00"  # Yellow
+            EMOJI="⚠️"
+          fi
+
           curl -X POST -H 'Content-type: application/json' --data '{
-            "text": "🚀 Deployment Status: ${{ github.event.workflow_run.conclusion }} for ${{ github.repository }}\n🔗 <${{ github.event.workflow_run.html_url }}|View Workflow Run>"
+            "attachments": [
+              {
+                "color": "'$COLOR'",
+                "title": "🚀 Deployment Notification",
+                "fields": [
+                  { "title": "Repository", "value": "${{ github.repository }}", "short": true },
+                  { "title": "Status", "value": "'$EMOJI' $STATUS", "short": true },
+                  { "title": "Environment", "value": "${{ matrix.environment }}", "short": true },
+                  { "title": "Run Details", "value": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Deployment>", "short": false }
+                ]
+              }
+            ]
           }' ${{ secrets.SLACK_WEBHOOK_URL }}
