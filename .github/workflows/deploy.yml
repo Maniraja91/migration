@@ -5,11 +5,11 @@ on:
     branches:
       - master  # Trigger deployment on push to master
 
-  workflow_dispatch:  # Allows manual approval step before proceeding
+  workflow_dispatch:  # Allows manual approval before proceeding
 
 jobs:
   deploy:
-    runs-on: self-hosted  # Runs on ASG-based GitHub self-hosted runner
+    runs-on: ubuntu-latest  # Using GitHub-hosted runner
     strategy:
       matrix:
         environment: ["Dev", "Test", "Staging", "Prod"]
@@ -25,22 +25,18 @@ jobs:
 
   notify:
     needs: deploy
-    runs-on: self-hosted
+    runs-on: ubuntu-latest  # GitHub-hosted runner
     steps:
-      - name: Fetch Slack Webhook from AWS Secrets Manager
-        run: |
-          export SLACK_WEBHOOK_URL=$(aws secretsmanager get-secret-value --secret-id slack-webhook-url --query 'SecretString' --output text)
-
       - name: Send Slack Notification for Approval
         run: |
           curl -X POST -H 'Content-type: application/json' --data '{
             "text": "🚀 *Deployment Completed for ${{ github.repository }}* \n🔍 *Environment:* ${{ matrix.environment }}\n✅ *Status:* Success\n🔗 *Run Details:* <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Workflow>\n\n⚠️ *Action Required:* Please manually trigger the next step in GitHub Actions to continue deployment."
-          }' "$SLACK_WEBHOOK_URL"
+          }' ${{ secrets.SLACK_WEBHOOK_URL }}
 
   approval:
     needs: notify
-    runs-on: self-hosted
-    if: github.event_name == 'workflow_dispatch'  # Ensures only manual approval triggers this job
+    runs-on: ubuntu-latest  # GitHub-hosted runner
+    if: github.event_name == 'workflow_dispatch'  # Ensures manual approval triggers this job
     steps:
       - name: Approval Received
         run: echo "Manual approval step triggered. Proceeding to next deployment phase."
