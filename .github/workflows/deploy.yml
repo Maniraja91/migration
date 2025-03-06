@@ -7,34 +7,34 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest  # Using GitHub-hosted runner
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         environment: ["Dev", "Test", "Staging", "Prod"]
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4  # Ensure the repo is available
+        uses: actions/checkout@v4  # Ensures the repo is available
 
-      - name: Prepare deploy.sh
+      - name: Make deploy.sh Executable
         run: chmod +x deploy.sh
 
-      - name: Deploy to ${{ matrix.environment }}
-        run: ./deploy.sh ${{ matrix.environment }} 1.0.0
+      - name: Execute deploy.sh
+        run: ./deploy.sh ${{ matrix.environment }} 1.0.0  # Runs the deploy script
 
-      - name: Debug - Check if finalize_deployment.sh exists
-        run: ls -l finalize_deployment.sh || echo "Script not found"
+      - name: Debug - Check if finalize_deployment.sh Exists
+        run: ls -l finalize_deployment.sh || echo "Script NOT FOUND!"
 
-      - name: Save Final Deployment Script (If Generated)
-        if: success()  # Only upload if the deployment is successful
+      - name: Save Final Deployment Script (If Exists)
+        if: success()  # Only upload if script exists
         uses: actions/upload-artifact@v4
         with:
           name: finalize-deployment
           path: finalize_deployment.sh
-          retention-days: 1  # Keep the artifact for at least 1 day
+          retention-days: 3  # Keep artifact for 3 days
 
   notify:
     needs: deploy
-    runs-on: ubuntu-latest  # GitHub-hosted runner
+    runs-on: ubuntu-latest
     steps:
       - name: Send Slack Notification for Approval
         run: |
@@ -44,31 +44,29 @@ jobs:
 
   approval:
     needs: notify
-    runs-on: ubuntu-latest  # GitHub-hosted runner
+    runs-on: ubuntu-latest
     environment: production  # Ensures manual approval is required
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4  # Ensure the repo is available
+        uses: actions/checkout@v4
 
-      - name: Restore Final Deployment Script (If Generated)
+      - name: Restore Final Deployment Script (If Exists)
         uses: actions/download-artifact@v4
         with:
           name: finalize-deployment
-          path: .  # Download the artifact to the current working directory
+          path: .  # Download to current working directory
 
       - name: Debug - Verify Script Exists
-        run: ls -l finalize_deployment.sh || echo "Script not found"
+        run: ls -l finalize_deployment.sh || echo "Script NOT FOUND AFTER DOWNLOAD!"
 
-      - name: Make Script Executable
+      - name: Make finalize_deployment.sh Executable
         run: chmod +x finalize_deployment.sh
 
       - name: Approval Received
         run: echo "Manual approval granted. Proceeding with deployment finalization."
 
-      - name: Execute Post-Approval Steps
-        run: |
-          echo "Executing final deployment steps after approval..."
-          ./finalize_deployment.sh
+      - name: Execute finalize_deployment.sh
+        run: ./finalize_deployment.sh  # Runs final script after approval
 
       - name: Send Slack Notification - Database Schema Deployed
         run: |
